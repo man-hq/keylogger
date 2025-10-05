@@ -1,31 +1,39 @@
-import os
+import os, asyncio
+from dotenv import load_dotenv
 import discord
 from discord.ext import commands
+import pyhook
+INTERVAL = 10
+
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    raise SystemExit("DISCORD_TOKEN missing")
 
 intents = discord.Intents.default()
-intents.message_content = True   # REQUIRED to read message text
-
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user} (id: {bot.user.id})")
+async def countdown_edit(channel, seconds):
+    msg = await channel.send(f"Countdown: {seconds}s")
+    for rem in range(seconds - 1, -1, -1):
+        await asyncio.sleep(1)
+        await msg.edit(content=f"Countdown: {rem}s")
+    await msg.edit(content="Done!")
+    asyncio.create_task(pull(channel))
+
+async def pull(channel):
+    await channel.send("PULLING THE KEYSTOKES")
 
 @bot.event
 async def on_message(message):
-    # ignore messages from bots (including itself)
     if message.author.bot:
         return
-
-    # exact match, case-insensitive
-    if message.content.lower().strip() == "hello":
-        await message.channel.send("Hello world!")
-
-    # allow commands to still work if you add them later
+    if message.content.lower().strip() == "start":
+        asyncio.create_task(countdown_edit(message.channel, INTERVAL))
+    if message.content.lower().strip() == "end":
+       await bot.close()    
     await bot.process_commands(message)
 
 if __name__ == "__main__":
-    token = os.environ.get("DISCORD_TOKEN")
-    if not token:
-        raise SystemExit("Set DISCORD_TOKEN environment variable")
-    bot.run(token)
+    bot.run(TOKEN)
